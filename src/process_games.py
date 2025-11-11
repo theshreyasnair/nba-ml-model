@@ -7,10 +7,14 @@ def process_games(df: pd.DataFrame) -> pd.DataFrame:
     df["AWAY_TEAM"] = df["MATCHUP"].apply(lambda x: x.split(" vs. ")[1] if "vs." in x else x.split(" @ ")[0])
     df["WIN"] = df["WL"].eq("W").astype(int)
 
-    home = df[df["HOME_GAME"]]
-    away = df[~df["HOME_GAME"]]
+    home = df[df["HOME_GAME"]][["GAME_ID", "GAME_DATE", "TEAM_ID", "PTS", "WIN"]].rename(
+        columns={"TEAM_ID": "TEAM_ID_HOME", "PTS": "PTS_HOME", "WIN": "WIN_HOME"}
+    )
+    away = df[~df["HOME_GAME"]][["GAME_ID", "GAME_DATE", "TEAM_ID", "PTS", "WIN"]].rename(
+        columns={"TEAM_ID": "TEAM_ID_AWAY", "PTS": "PTS_AWAY", "WIN": "WIN_AWAY"}
+    )
 
-    merged = home.merge(away, on="GAME_ID", suffixes=("_HOME", "_AWAY"))
+    merged = home.merge(away, on=["GAME_ID", "GAME_DATE"])
     merged["home_win"] = (merged["PTS_HOME"] > merged["PTS_AWAY"]).astype(int)
     return merged
 

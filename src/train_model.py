@@ -1,45 +1,58 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix
 from sklearn.preprocessing import StandardScaler
 
-def train_baseline_model():
-    scaler = StandardScaler()
+def train_and_evaluate(model, df, features, target="home_win", scale=False):
+    df = df.dropna(subset=features + [target])
 
-    df = pd.read_csv("../data/processed/2023_24_features.csv")
-    df = df.dropna(subset = ["avg_pts_lastN_HOME", "avg_pts_lastN_AWAY", "home_win"])
+    X = df[features]
+    y = df[target]
 
-    X = df[["avg_pts_lastN_HOME", "avg_pts_lastN_AWAY"]]
-    y = df["home_win"]
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, shuffle=False
+    )
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle = False)
+    if scale:
+        scaler = StandardScaler()
+        X_train = pd.DataFrame(scaler.fit_transform(X_train), columns=X_train.columns)
+        X_test = pd.DataFrame(scaler.transform(X_test), columns=X_test.columns)
 
-    X_train_scaled = pd.DataFrame(scaler.fit_transform(X_train), columns = X_train.columns)
-    X_test_scaled = pd.DataFrame(scaler.transform(X_test), columns = X_test.columns)
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    y_proba = model.predict_proba(X_test)[:, 1]
 
-    model = LogisticRegression()
-    model.fit(X_train_scaled, y_train)
+    acc = accuracy_score(y_test, y_pred)
+    auc = roc_auc_score(y_test, y_proba)
 
-    y_pred = model.predict(X_test_scaled)
-    y_proba = model.predict_proba(X_test_scaled)[:, 1]
-
-    print("Accuracy: ", accuracy_score(y_test, y_pred))
-    print("ROC AUC: ", roc_auc_score(y_test, y_proba))
-    print("Confusion Matrix: ", confusion_matrix(y_test, y_pred))
+    print(f"\n=== {model.__class__.__name__} ===")
+    print(f"Accuracy: {acc:.3f}")
+    print(f"ROC AUC: {auc:.3f}")
+    print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
 
     return model
 
 if __name__ == "__main__":
-    train_baseline_model()
+    df = pd.read_csv("../data/processed/2023_24_features.csv")
 
-'''
-loads engineered data
-drops nan values/missing features
-uses 80 for training and 20 for testing
-trains a logistic regression model
+    features = [
+        "avg_pts_lastN_HOME",
+        "avg_pts_lastN_AWAY",
+        "rest_days_HOME",
+        "rest_days_AWAY",
+        "rest_diff",
+        "elo_HOME",
+        "elo_AWAY"
+    ]
+    lr = LogisticRegression(max_iter=1000)
+    train_and_evaluate(lr, df, features, scale=True)
 
-accuracy -> accuracy
-roc auc -> how well it ranks games by confidence
-confusion matrix -> breakdown of t/f +/-
-'''
+    rf = RandomForestClassifier(
+        n_estimators=400,
+        max_depth=12,
+        min_samples_leaf=5,
+        random_state=42
+    )
+    train_and_evaluate(rf, df, features, scale=False)
